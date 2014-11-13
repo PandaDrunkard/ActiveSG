@@ -1,6 +1,6 @@
 # ActiveSG
 
-TODO: Write a gem description
+A simple ActiveSG client.
 
 ## Installation
 
@@ -20,7 +20,20 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```
+client = ActiveSG.Client.new
+client.username = "xxxx"
+client.password = "xxxx"
+
+client.login
+
+client.available_slots_on 31/12/2014 289
+
+client.book_slot xxxxxxxx
+client.book_slot xxxxxxxx
+
+client.logout
+```
 
 ## Contributing
 
