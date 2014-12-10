@@ -4,118 +4,239 @@ module ActiveSG
 	class Client
 		attr :username, true
 		attr :password, true
+		attr :debug, true
+
+		@@day_of_week = {
+			0 => "Sun",
+			1 => "Mon",
+			2 => "Tue",
+			3 => "Wed",
+			4 => "Thu",
+			5 => "Fri",
+			6 => "Sat"
+		}
+		@@month = {
+			1 => "Jan",
+			2 => "Feb",
+			3 => "Mar",
+			4 => "Apr",
+			5 => "May",
+			6 => "Jun",
+			7 => "Jul",
+			8 => "Aug",
+			9 => "Sep",
+			10 => "Oct",
+			11 => "Nov",
+			12 => "Dec"
+		}
 
 		@@http
 		@@cookie = {}
+		@@slot_url
+		@@booking_url
+		@@oauth_key
+		@@oauth_value
+		@@venue_id
+		@@date
+
+		def initialize(username, password, debug = false)
+			@username = username
+			@password = password
+			@debug = debug
+
+			uri = URI.parse("https://members.myactivesg.com/auth")
+			@@http = Net::HTTP.new(uri.host, uri.port)
+			@@http.use_ssl = true
+			@@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+		end
+
 		def get_cookie(res)
 			res.get_fields('Set-Cookie').each{ |str|
 				k,v = str[0...str.index(';')].split('=')
 				@@cookie[k] = v
 			}
+			if @debug
+				@@cookie.each{ |k,v|
+					puts k
+					puts v
+				}
+			end
 		end
+
 		def set_cookie()
 			@@cookie.map{ |k,v| "#{k}=#{v}" }.join(';')
 		end
 
-		def write_to_file(text, path)
-			File.open(text, "w") do |file|
-				file.write(path)
+		def write_to_file(path, text)
+			if @debug
+				File.open(path, "w") do |file|
+					file.write(text)
+				end
 			end
 		end
 
 		def login
-			uri = URI.parse("https://members.myactivesg.com/auth/signin")
-			@@http = Net::HTTP.new(uri.host, uri.port)
-			@@http.use_ssl = true
-			@@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-
+			uri = URI.parse("https://members.myactivesg.com/auth")
 			header = {
-				"Content-Type" => "application/x-www-form-urlencoded"
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Connection" => "keep-alive",
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
 			}
+			req = Net::HTTP::Get.new(uri.path, header)
+			res = @@http.request(req)
+			get_cookie(res)
 
+			write_to_file("tmp/auth.html", res.body)
+
+			uri = URI.parse("https://members.myactivesg.com/auth/signin")
+			header = {
+				"Cookie" => set_cookie,
+				"Origin" => "https://members.myactivesg.com",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",		
+				"Content-Type" => "application/x-www-form-urlencoded",
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Cache-Control" => "max-age=0",
+				"Referer" => "https://members.myactivesg.com/auth",
+				"Connection" => "keep-alive",
+				"DNT" => "1"
+			}
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password)
-
-			res = @@http.start { |http| http.request(req) }
+			res = @@http.request(req)
 			get_cookie(res)
+
+			write_to_file("tmp/auth-signin.html", res.body)
 		end
 
-		def get_escaped_date_filter(date)
-			escaped = ""
-			case date.wday
-			when 0
-				escaped += "Sun"
-			when 1
-				escaped += "Mon"
-			when 2
-				escaped += "Tue"
-			when 3
-				escaped += "Wed"
-			when 4
-				escaped += "Thu"
-			when 5
-				escaped += "Fri"
-			when 6
-				escaped += "Sat"
-			end
-			escaped += "%2C+" + date.day.to_s + "+"
-			case date.month
-			when 1
-				escaped += "Jan"
-			when 2
-				escaped += "Feb"
-			when 3
-				escaped += "Mar"
-			when 4
-				escaped += "Apr"
-			when 5
-				escaped += "May"
-			when 6
-				escaped += "Jun"
-			when 7
-				escaped += "Jul"
-			when 8
-				escaped += "Aug"
-			when 9
-				escaped += "Sep"
-			when 10
-				escaped += "Oct"
-			when 11
-				escaped += "Nov"
-			when 12
-				escaped += "Dec"
-			end
-			escaped += "+" + date.year.to_s
-			escaped
-		end
+		def available_slots_on(date, venue)
+			@@venue_id = venue
+			@@date = date
 
-		def available_slots_on(date,venue)
-			# retrieve location of site
-			date_filter = get_escaped_date_filter(date)
-			venue_filter = venue.to_s
-			uri = URI.parse("https://members.myactivesg.com/facilities/result?" \
-				+ "activity_filter=18" \
+			uri = URI.parse("https://members.myactivesg.com/facilities")
+			header = {
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Referer" => "https://members.myactivesg.com/auth",
+				"Cookie" => set_cookie,
+				"Connection" => "keep-alive",
+			}
+			req = Net::HTTP::Get.new(uri.path, header)
+			res = @@http.request(req)
+			get_cookie(res)
+
+			write_to_file("tmp/facilities.html", res.body)
+
+			date_filter = @@day_of_week[date.wday] \
+				+ "%2C+" + date.day.to_s \
+				+ "+" + @@month[date.month] \
+				+ "+" + date.year.to_s
+
+			if date.wday == 0
+				day_filter = 7
+			else
+				day_filter = date.wday + 1
+			end
+
+			uri = URI.parse("https://members.myactivesg.com/facilities/result" \
+				+ "?activity_filter=18" \
 				+ "&venue_filter=" + venue.to_s \
-				+ "&day_filter=7" \
+				+ "&day_filter=" + day_filter.to_s \
 				+ "&date_filter=" + date_filter \
 				+ "&search=Search");
-			res = Net::HTTP.get_response(uri);
-			
-			uri = URI.parse(res['location'])
-			puts uri
-
 			header = {
-				"Cookie" => set_cookie
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Referer" => "https://members.myactivesg.com/auth",
+				"Cookie" => set_cookie,
+				"Connection" => "keep-alive",
 			}
-			req = Net::HTTP::Post.new(uri.path, header)
-			res = @@http.start { |http| http.request(req) }
+			req = Net::HTTP::Get.new(uri, header)
+			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/available_slots_on.html", res.body)
+			@@slot_url = res["Location"]
+			uri = URI.parse(@@slot_url)
+			header = {
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Referer" => "https://members.myactivesg.com/auth",
+				"Cookie" => set_cookie,
+				"Connection" => "keep-alive",
+			}
+			req = Net::HTTP::Get.new(uri, header)
+			res = @@http.request(req)
+			get_cookie(res)
+
+			write_to_file("tmp/result.html", res.body)
+
+			parse_search_result(res.body)
 		end
 
-		def book_slot(slot_id)
-			puts slot_id
+		def parse_search_result(body)
+			reg_slot = /<input type="checkbox" name="timeslots\[\]" id="([\w]+)" value="(Court (\d+);\d+;\d+;([\d:]+);[\d:]+)("|[^>]*)>/
+			available_slots = {}
+			body.scan(reg_slot) {|s| available_slots[s[2] + " - " + s[3]] = s[1] }
+
+			reg_action = /<form id="formTimeslots" action="([^"]+)"/
+			@@booking_url = reg_action.match(body)[1]
+
+			reg_oauth = /<input type="hidden" name="([\w]{32})" value="([\w]{64})">/
+			m = reg_oauth.match(body)
+			@@oauth_key = m[1]
+			@@oauth_value = m[2]
+
+			available_slots
+		end
+
+		def book_slots(*slots)
+			(1..5).each do
+				slots.each{ |slot|
+					book_single_slot(slot)
+				}
+			end
+		end
+		def book_single_slot(slot)
+			uri = URI.parse(@@booking_url)
+			header = {
+				"Cookie" => set_cookie,
+				"Origin" => "https://members.myactivesg.com",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
+				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
+				"Accept" => "*/*",
+				"Referer" => @@slot_url,
+				"X-Requested-With" => "XMLHttpRequest",
+				"Connection" => "keep-alive",
+				"DNT" => "1",
+			}
+			form_data = {
+				"activity_id" => 18,
+				"venue_id" => @@venue_id.to_s,
+				"chosen_date" => @@date.to_s,
+				@@oauth_key => @@oauth_value,
+				"timeslots[]" => slot,
+				"cart" => "ADD TO CART",
+				"fdscv" => "0XX0Z"
+			}
+			req = Net::HTTP::Post.new(uri.path, header)
+			req.set_form_data(form_data)
+			res = @@http.start { |http| http.request(req) }
+			p res.body
 		end
 
 		def logout
