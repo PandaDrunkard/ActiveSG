@@ -205,7 +205,11 @@ module ActiveSG
 		def book_slots(*slots)
 			(1..5).each do
 				slots.each{ |slot|
-					book_single_slot(slot)
+					exceeded = book_single_slot(slots)
+					if exceeded
+						puts "exceeded booking cap. Maybe booked :)"
+						return
+					end
 				}
 			end
 		end
@@ -236,7 +240,7 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = @@http.start { |http| http.request(req) }
-			p res.body
+			res.body == "{\"method\":\"alert\",\"message\":\"You haven't selected any timeslot\"}"
 		end
 
 		def logout
