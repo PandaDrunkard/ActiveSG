@@ -134,6 +134,21 @@ module ActiveSG
 
 			write_to_file("tmp/facilities.html", res.body)
 
+			quick_booking = res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
+			puts quick_booking
+
+			if quick_booking
+				return {}
+			else
+				return slots_by_normal
+			end
+		end
+
+		def slots_by_quick_booking(date, venue)
+			
+		end
+
+		def slots_by_normal(date, venue)
 			date_filter = @@day_of_week[date.wday] \
 				+ "%2C+" + date.day.to_s \
 				+ "+" + @@month[date.month] \
@@ -203,15 +218,19 @@ module ActiveSG
 		end
 
 		def book_slots(*slots)
-			(1..5).each do
-				slots.each{ |slot|
-					exceeded = book_single_slot(slots)
-					if exceeded
-						puts "exceeded booking cap. Maybe booked :)"
-						return
+			slots.each{ |slot|
+				booked = false
+				(1..5).each do
+					booked = book_single_slot(slot)
+					if booked
+						puts "court [#{slot}] booked :)"
+						break
 					end
-				}
-			end
+				end
+				if booked == false
+					puts "court [#{slot}] cannot be booked :("
+				end
+			}
 		end
 		def book_single_slot(slot)
 			uri = URI.parse(@@booking_url)
@@ -240,7 +259,14 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = @@http.start { |http| http.request(req) }
-			res.body == "{\"method\":\"alert\",\"message\":\"You haven't selected any timeslot\"}"
+			p res.body
+			if res.body == "{\"message\":\"Your bookings have been saved.\",\"method\":\"confirm\",\"confirm\":\"Your items are added to cart. Would you like to go to shopping cart?\",\"redirect\":\"https:\\/\\/members.myactivesg.com\\/cart\"}"
+				return true
+			else
+				return false
+			end
+
+			# res.body == "{\"method\":\"alert\",\"message\":\"You haven't selected any timeslot\"}"
 		end
 
 		def logout
