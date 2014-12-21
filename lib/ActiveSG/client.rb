@@ -50,6 +50,10 @@ module ActiveSG
 			@@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 		end
 
+		def write_log(msg)
+			puts "#{@username} : #{msg}"
+		end
+
 		def get_cookie(res)
 			res.get_fields('Set-Cookie').each{ |str|
 				k,v = str[0...str.index(';')].split('=')
@@ -57,8 +61,8 @@ module ActiveSG
 			}
 			if @debug
 				@@cookie.each{ |k,v|
-					puts k
-					puts v
+					write_log k
+					write_log v
 				}
 			end
 		end
@@ -135,25 +139,56 @@ module ActiveSG
 			write_to_file("tmp/facilities.html", res.body)
 
 			quick_booking = res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
-			puts quick_booking
+			write_log quick_booking
 
 			if quick_booking
-				return {}
+				return slots_by_quick_booking(date, venue)
 			else
-				return slots_by_normal
+				return slots_by_normal(date, venue)
 			end
 		end
 
-		def slots_by_quick_booking(date, venue)
-			
-		end
-
-		def slots_by_normal(date, venue)
-			date_filter = @@day_of_week[date.wday] \
+		def create_date_filter(date)
+			@@day_of_week[date.wday] \
 				+ "%2C+" + date.day.to_s \
 				+ "+" + @@month[date.month] \
 				+ "+" + date.year.to_s
+		end
 
+		def slots_by_quick_booking(date, venue)
+			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
+			header = {
+				"Cookie" => set_cookie,
+				"Origin" => "https://members.myactivesg.com",
+				"Host" => "members.myactivesg.com",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
+				"Content-Type" => "application/x-www-form-urlencoded",
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Cache-Control" => "max-age=0",
+				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
+				"Connection" => "keep-alive",
+				"DNT" => "1",
+
+			}
+			form_data = {
+				"activity_filter" => "18",
+				"venue_filter" => venue.to_s,
+				"date_filter" => create_date_filter(date)
+			}
+
+			req = Net::HTTP::Get.new(uri, header)
+			req.set_form_data(form_data)
+
+			res = @@http.request(req)
+			get_cookie(res)
+
+			write_to_file("tmp/quick-booking.html", res.body)
+
+			parse_search_result(res.body)
+		end
+
+		def slots_by_normal(date, venue)
 			if date.wday == 0
 				day_filter = 7
 			else
@@ -164,7 +199,7 @@ module ActiveSG
 				+ "?activity_filter=18" \
 				+ "&venue_filter=" + venue.to_s \
 				+ "&day_filter=" + day_filter.to_s \
-				+ "&date_filter=" + date_filter \
+				+ "&date_filter=" + create_date_filter(date) \
 				+ "&search=Search");
 			header = {
 				"DNT" => "1",
@@ -219,16 +254,18 @@ module ActiveSG
 
 		def book_slots(*slots)
 			slots.each{ |slot|
+				next if slot == nil
+
 				booked = false
 				(1..5).each do
 					booked = book_single_slot(slot)
 					if booked
-						puts "court [#{slot}] booked :)"
+						write_log "court [#{slot}] booked :)"
 						break
 					end
 				end
 				if booked == false
-					puts "court [#{slot}] cannot be booked :("
+					write_log "court [#{slot}] cannot be booked :("
 				end
 			}
 		end
@@ -259,7 +296,6 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = @@http.start { |http| http.request(req) }
-			p res.body
 			if res.body == "{\"message\":\"Your bookings have been saved.\",\"method\":\"confirm\",\"confirm\":\"Your items are added to cart. Would you like to go to shopping cart?\",\"redirect\":\"https:\\/\\/members.myactivesg.com\\/cart\"}"
 				return true
 			else
@@ -267,10 +303,6 @@ module ActiveSG
 			end
 
 			# res.body == "{\"method\":\"alert\",\"message\":\"You haven't selected any timeslot\"}"
-		end
-
-		def logout
-			puts 'bye, ' + @username
 		end
 	end
 end
