@@ -139,11 +139,12 @@ module ActiveSG
 			write_to_file("tmp/facilities.html", res.body)
 
 			quick_booking = res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
-			write_log quick_booking
-
+			
 			if quick_booking
+				write_log "Quick booking"
 				return slots_by_quick_booking(date, venue)
 			else
+				write_log "Non-quick booking"
 				return slots_by_normal(date, venue)
 			end
 		end
@@ -257,11 +258,14 @@ module ActiveSG
 				next if slot == nil
 
 				booked = false
-				(1..5).each do
+				(1..30).each do
 					booked = book_single_slot(slot)
 					if booked
 						write_log "court [#{slot}] booked :)"
 						break
+					else 
+						write_log "failed to book [#{slot}]. try again."
+						sleep(2)
 					end
 				end
 				if booked == false
@@ -295,7 +299,7 @@ module ActiveSG
 			}
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
-			res = @@http.start { |http| http.request(req) }
+			res = @@http.request(req)
 			if res.body == "{\"message\":\"Your bookings have been saved.\",\"method\":\"confirm\",\"confirm\":\"Your items are added to cart. Would you like to go to shopping cart?\",\"redirect\":\"https:\\/\\/members.myactivesg.com\\/cart\"}"
 				return true
 			else
