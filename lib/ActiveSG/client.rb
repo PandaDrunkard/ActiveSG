@@ -243,12 +243,15 @@ module ActiveSG
 			body.scan(reg_slot) {|s| available_slots[s[2] + " - " + s[3]] = s[1] }
 
 			reg_action = /action="([\w]+?)"/
-			@@booking_url = reg_action.match(body)[1]
+			m = reg_action.match(body)
+			return {} if m == nil
+			@@booking_url = m[1]
 
 			write_log "Booking URL: #{@@booking_url}"
 
 			reg_oauth = /<input type="hidden" name="([\w]{32})" value="([\w]{64})">/
 			m = reg_oauth.match(body)
+			return {} if m == nil
 			@@oauth_key = m[1]
 			@@oauth_value = m[2]
 
@@ -267,7 +270,7 @@ module ActiveSG
 						break
 					else 
 						write_log "failed to book [#{slot}]. try again."
-						sleep(2)
+						sleep(1)
 					end
 				end
 				if booked == false
@@ -302,13 +305,8 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = @@http.request(req)
-			if res.body == "{\"message\":\"Your bookings have been saved.\",\"method\":\"confirm\",\"confirm\":\"Your items are added to cart. Would you like to go to shopping cart?\",\"redirect\":\"https:\\/\\/members.myactivesg.com\\/cart\"}"
-				return true
-			else
-				return false
-			end
 
-			# res.body == "{\"method\":\"alert\",\"message\":\"You haven't selected any timeslot\"}"
+			res.body[/Your bookings have been saved/] != nil
 		end
 	end
 end
