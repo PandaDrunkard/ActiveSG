@@ -93,7 +93,7 @@ module ActiveSG
 			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/auth.html", res.body)
+			write_to_file("tmp/html/auth.html", res.body)
 
 			uri = URI.parse("https://members.myactivesg.com/auth/signin")
 			header = {
@@ -114,7 +114,7 @@ module ActiveSG
 			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/auth-signin.html", res.body)
+			write_to_file("tmp/html/auth-signin.html", res.body)
 		end
 
 		def available_slots_on(date, venue)
@@ -136,7 +136,7 @@ module ActiveSG
 			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/facilities.html", res.body)
+			write_to_file("tmp/html/facilities.html", res.body)
 
 			quick_booking = res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
 			
@@ -178,13 +178,13 @@ module ActiveSG
 				"date_filter" => create_date_filter(date)
 			}
 
-			req = Net::HTTP::Get.new(uri, header)
+			req = Net::HTTP::Post.new(uri, header)
 			req.set_form_data(form_data)
 
 			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/quick-booking.html", res.body)
+			write_to_file("tmp/html/quick-booking.html", res.body)
 
 			parse_search_result(res.body)
 		end
@@ -232,7 +232,7 @@ module ActiveSG
 			res = @@http.request(req)
 			get_cookie(res)
 
-			write_to_file("tmp/result.html", res.body)
+			write_to_file("tmp/html/result.html", res.body)
 
 			parse_search_result(res.body)
 		end
@@ -242,8 +242,10 @@ module ActiveSG
 			available_slots = {}
 			body.scan(reg_slot) {|s| available_slots[s[2] + " - " + s[3]] = s[1] }
 
-			reg_action = /<form id="formTimeslots" action="([^"]+)"/
+			reg_action = /action="([\w]+?)"/
 			@@booking_url = reg_action.match(body)[1]
+
+			write_log "Booking URL: #{@@booking_url}"
 
 			reg_oauth = /<input type="hidden" name="([\w]{32})" value="([\w]{64})">/
 			m = reg_oauth.match(body)
