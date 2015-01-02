@@ -38,6 +38,7 @@ module ActiveSG
 		@@oauth_value
 		@@venue_id
 		@@date
+		@@is_quick_booking = false
 
 		def initialize(username, password, debug = false)
 			@username = username
@@ -142,18 +143,20 @@ module ActiveSG
 			
 			if quick_booking
 				write_log "Quick booking"
+				@@is_quick_booking = true
 				return slots_by_quick_booking(date, venue)
 			else
 				write_log "Non-quick booking"
+				@@is_quick_booking = false
 				return slots_by_normal(date, venue)
 			end
 		end
 
 		def create_date_filter(date)
 			@@day_of_week[date.wday] \
-				+ "%2C+" + date.day.to_s \
-				+ "+" + @@month[date.month] \
-				+ "+" + date.year.to_s
+				+ ", " + date.day.to_s \
+				+ " " + @@month[date.month] \
+				+ " " + date.year.to_s	
 		end
 
 		def slots_by_quick_booking(date, venue)
@@ -238,24 +241,33 @@ module ActiveSG
 		end
 
 		def parse_search_result(body)
-			reg_slot = /<input type="checkbox" name="timeslots\[\]" id="([\w]+)" value="(Court (\d+);\d+;\d+;([\d:]+);[\d:]+)("|[^>]*)>/
+			reg_slot =  /name="timeslots\[\]" id="([\w]+?)" value="(.+?)"/
 			available_slots = {}
-			body.scan(reg_slot) {|s| available_slots[s[2] + " - " + s[3]] = s[1] }
+			body.scan(reg_slot) {|s| available_slots[get_court_key(s[1])] = s[1] }
+			#puts available_slots
 
-			reg_action = /action="([\w]+?)"/
+			reg_action = /id="formTimeslots" action="(.+?)"/
 			m = reg_action.match(body)
 			return {} if m == nil
 			@@booking_url = m[1]
 
 			write_log "Booking URL: #{@@booking_url}"
 
-			reg_oauth = /<input type="hidden" name="([\w]{32})" value="([\w]{64})">/
+			reg_oauth = /name="([\w]{32})" value="([\w]{64})"/
 			m = reg_oauth.match(body)
 			return {} if m == nil
 			@@oauth_key = m[1]
 			@@oauth_value = m[2]
 
+			puts @@oauth_key
+			puts @@oauth_value
+
 			available_slots
+		end
+
+		def get_court_key(id)
+			arr = id.split(';')
+			arr[0].gsub("Court ", "") + " - " + arr[3]
 		end
 
 		def book_slots(*slots)
@@ -288,7 +300,7 @@ module ActiveSG
 				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
 				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
 				"Accept" => "*/*",
-				"Referer" => @@slot_url,
+				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
 				"X-Requested-With" => "XMLHttpRequest",
 				"Connection" => "keep-alive",
 				"DNT" => "1",
@@ -302,9 +314,12 @@ module ActiveSG
 				"cart" => "ADD TO CART",
 				"fdscv" => "0XX0Z"
 			}
+			puts form_data
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = @@http.request(req)
+
+			puts res.body
 
 			res.body[/Your bookings have been saved/] != nil
 		end
