@@ -59,12 +59,12 @@ module ActiveSG
 			@@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 		end
 
-		def run_request(&block)
-			block()
+		def run_request
+			yield
 		end
 
-		def run_request_with_mutex(&block)
-			mutex.synchronize { block() }
+		def run_request_with_mutex
+			mutex.synchronize { yield }
 		end
 
 		def write_log(msg)
@@ -107,7 +107,9 @@ module ActiveSG
 				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do 
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth.html", res.body)
@@ -128,7 +130,9 @@ module ActiveSG
 			}
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do 
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth-signin.html", res.body)
@@ -150,7 +154,9 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			write_to_file("tmp/html/facilities.html", res.body)
@@ -200,7 +206,9 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri, header)
 			req.set_form_data(form_data)
 
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			write_to_file("tmp/html/quick-booking.html", res.body)
@@ -232,7 +240,9 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri, header)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			@@slot_url = res["Location"]
@@ -248,7 +258,9 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri, header)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do
+				res = @@http.request(req)
+			end
 			get_cookie(res)
 
 			write_to_file("tmp/html/result.html", res.body)
@@ -333,7 +345,9 @@ module ActiveSG
 			puts form_data
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
-			@@request_hundler { res = @@http.request(req) }
+			@@request_hundler do
+				res = @@http.request(req)
+			end
 
 			puts res.body
 
