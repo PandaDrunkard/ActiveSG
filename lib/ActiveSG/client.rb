@@ -40,8 +40,7 @@ module ActiveSG
 		@@venue_id
 		@@date
 		@@is_quick_booking = false
-
-		@@request_hundler = run_request
+		@@referer_url
 
 		def initialize(username, password, debug = false, mutex = nil)
 			@username = username
@@ -49,22 +48,20 @@ module ActiveSG
 			@debug = debug
 			@mutex = mutex
 
-			if @mutex != nil
-				@@request_hundler = run_request_with_mutex
-			end
-
 			uri = URI.parse("https://members.myactivesg.com/auth")
 			@@http = Net::HTTP.new(uri.host, uri.port)
 			@@http.use_ssl = true
 			@@http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 		end
 
-		def run_request
-			yield
-		end
-
-		def run_request_with_mutex
-			mutex.synchronize { yield }
+		def request(req)
+			res = nil
+			if @mutex == nil
+				res = @@http.request(req)
+			else
+				@mutex.synchronize { res = @@http.request(req) }
+			end
+			res
 		end
 
 		def write_log(msg)
@@ -107,9 +104,7 @@ module ActiveSG
 				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
-			@@request_hundler do 
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth.html", res.body)
@@ -130,9 +125,7 @@ module ActiveSG
 			}
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password)
-			@@request_hundler do 
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth-signin.html", res.body)
@@ -154,9 +147,7 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
-			@@request_hundler do
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
 
 			write_to_file("tmp/html/facilities.html", res.body)
@@ -174,11 +165,18 @@ module ActiveSG
 			end
 		end
 
-		def create_date_filter(date)
-			@@day_of_week[date.wday] \
-				+ ", " + date.day.to_s \
-				+ " " + @@month[date.month] \
-				+ " " + date.year.to_s	
+		def create_date_filter(date, escape)
+			if escape
+				@@day_of_week[date.wday] \
+					+ "%2C+" + date.day.to_s \
+					+ "+" + @@month[date.month] \
+					+ "+" + date.year.to_s
+			else
+				@@day_of_week[date.wday] \
+					+ ", " + date.day.to_s \
+					+ " " + @@month[date.month] \
+					+ " " + date.year.to_s
+			end
 		end
 
 		def slots_by_quick_booking(date, venue)
@@ -200,16 +198,14 @@ module ActiveSG
 			form_data = {
 				"activity_filter" => "18",
 				"venue_filter" => venue.to_s,
-				"date_filter" => create_date_filter(date)
+				"date_filter" => create_date_filter(date, false)
 			}
 
 			req = Net::HTTP::Post.new(uri, header)
 			req.set_form_data(form_data)
-
-			@@request_hundler do
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
+			@@referer_url = res.to_s
 
 			write_to_file("tmp/html/quick-booking.html", res.body)
 
@@ -227,7 +223,7 @@ module ActiveSG
 				+ "?activity_filter=18" \
 				+ "&venue_filter=" + venue.to_s \
 				+ "&day_filter=" + day_filter.to_s \
-				+ "&date_filter=" + create_date_filter(date) \
+				+ "&date_filter=" + create_date_filter(date, true) \
 				+ "&search=Search");
 			header = {
 				"DNT" => "1",
@@ -240,9 +236,7 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri, header)
-			@@request_hundler do
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
 
 			@@slot_url = res["Location"]
@@ -258,10 +252,9 @@ module ActiveSG
 				"Connection" => "keep-alive",
 			}
 			req = Net::HTTP::Get.new(uri, header)
-			@@request_hundler do
-				res = @@http.request(req)
-			end
+			res = request(req)
 			get_cookie(res)
+			@@referer_url = uri.to_s
 
 			write_to_file("tmp/html/result.html", res.body)
 
@@ -272,7 +265,6 @@ module ActiveSG
 			reg_slot =  /name="timeslots\[\]" id="([\w]+?)" value="(.+?)"/
 			available_slots = {}
 			body.scan(reg_slot) {|s| available_slots[get_court_key(s[1])] = s[1] }
-			#puts available_slots
 
 			reg_action = /id="formTimeslots" action="(.+?)"/
 			m = reg_action.match(body)
@@ -320,6 +312,7 @@ module ActiveSG
 		end
 		def book_single_slot(slot)
 			uri = URI.parse(@@booking_url)
+			referer_url = 
 			header = {
 				"Cookie" => set_cookie,
 				"Origin" => "https://members.myactivesg.com",
@@ -328,7 +321,7 @@ module ActiveSG
 				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
 				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
 				"Accept" => "*/*",
-				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
+				"Referer" => @@referer_url,
 				"X-Requested-With" => "XMLHttpRequest",
 				"Connection" => "keep-alive",
 				"DNT" => "1",
@@ -342,12 +335,9 @@ module ActiveSG
 				"cart" => "ADD TO CART",
 				"fdscv" => "0XX0Z"
 			}
-			puts form_data
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
-			@@request_hundler do
-				res = @@http.request(req)
-			end
+			res = request(req)
 
 			puts res.body
 
