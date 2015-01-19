@@ -279,9 +279,6 @@ module ActiveSG
 			@@oauth_key = m[1]
 			@@oauth_value = m[2]
 
-			puts @@oauth_key
-			puts @@oauth_value
-
 			available_slots
 		end
 
