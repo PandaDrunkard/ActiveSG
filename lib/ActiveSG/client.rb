@@ -205,7 +205,7 @@ module ActiveSG
 			req.set_form_data(form_data)
 			res = request(req)
 			get_cookie(res)
-			@@referer_url = res.to_s
+			@@referer_url = uri.to_s
 
 			write_to_file("tmp/html/quick-booking.html", res.body)
 
