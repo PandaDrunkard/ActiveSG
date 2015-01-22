@@ -70,7 +70,7 @@ module ActiveSG
 
 		def get_cookie(res)
 			set_cookie_value = res.get_fields('Set-Cookie')
-			return if set_cookie_value = nil
+			return if set_cookie_value == nil
 			
 			res.get_fields('Set-Cookie').each{ |str|
 				k,v = str[0...str.index(';')].split('=')
