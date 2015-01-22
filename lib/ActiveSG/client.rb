@@ -339,7 +339,7 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = request(req)
-			set_cookie(res) if res != nil
+			get_cookie(res) if res != nil
 
 			puts "#{@username} : #{res.body}"
 
