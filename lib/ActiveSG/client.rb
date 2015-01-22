@@ -55,6 +55,7 @@ module ActiveSG
 		end
 
 		def request(req)
+			req["Accept_Endocing"] = "gzip, deflate, sdch"
 			res = nil
 			if @mutex == nil
 				res = @@http.request(req)
@@ -298,15 +299,15 @@ module ActiveSG
 				(1..30).each do
 					booked = book_single_slot(slot)
 					if booked
-						write_log "court [#{slot}] booked :)"
+						puts "#{username} : court [#{slot}] booked :)"
 						break
 					else 
-						write_log "failed to book [#{slot}]. try again."
+						puts "#{username} : failed to book [#{slot}]. try again."
 						sleep(1)
 					end
 				end
 				if booked == false
-					write_log "court [#{slot}] cannot be booked :("
+					puts "#{username} : court [#{slot}] cannot be booked :("
 				end
 			}
 		end
@@ -338,8 +339,14 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = request(req)
+			set_cookie(res) if res != nil
 
-			puts res.body
+			puts "#{@username} : #{res.body}"
+
+			if res.body[/Bad Request/] != nil
+				puts "#{username} : *****ERROR********"
+				raise 'Bad Request. Retry'
+			end
 
 			res.body[/Your bookings have been saved/] != nil
 		end
