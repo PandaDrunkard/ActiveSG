@@ -42,11 +42,10 @@ module ActiveSG
 		@@is_quick_booking = false
 		@@referer_url
 
-		def initialize(username, password, debug = false, mutex = nil)
+		def initialize(username, password, debug = false)
 			@username = username
 			@password = password
 			@debug = debug
-			@mutex = mutex
 
 			uri = URI.parse("https://members.myactivesg.com/auth")
 			@@http = Net::HTTP.new(uri.host, uri.port)
@@ -56,13 +55,7 @@ module ActiveSG
 
 		def request(req)
 			req["Accept_Endocing"] = "gzip, deflate, sdch"
-			res = nil
-			if @mutex == nil
-				res = @@http.request(req)
-			else
-				@mutex.synchronize { res = @@http.request(req) }
-			end
-			res
+			@@http.request(req)
 		end
 
 		def write_log(msg)
