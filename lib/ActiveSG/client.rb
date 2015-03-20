@@ -106,6 +106,8 @@ module ActiveSG
 
 			write_to_file("tmp/html/auth.html", res.body)
 
+			csrf = get_csrf(res.body)
+
 			uri = URI.parse("https://members.myactivesg.com/auth/signin")
 			header = {
 				"Cookie" => set_cookie,
@@ -121,11 +123,19 @@ module ActiveSG
 				"DNT" => "1"
 			}
 			req = Net::HTTP::Post.new(uri.path, header)
-			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password)
+			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password) + "&_csrf=" + csrf
 			res = request(req)
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth-signin.html", res.body)
+		end
+
+		def get_csrf(body)
+			reg_csrv = /name="_csrf"\s*value="([^"]+)"/
+			m = reg_csrv.match(body)
+			return "" if m == nil
+
+			m[1]
 		end
 
 		def available_slots_on(date, venue)
