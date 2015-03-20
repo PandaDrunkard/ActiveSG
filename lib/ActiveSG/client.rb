@@ -42,11 +42,10 @@ module ActiveSG
 		@@is_quick_booking = false
 		@@referer_url
 
-		def initialize(username, password, debug = false, mutex = nil)
+		def initialize(username, password, debug = false)
 			@username = username
 			@password = password
 			@debug = debug
-			@mutex = mutex
 
 			uri = URI.parse("https://members.myactivesg.com/auth")
 			@@http = Net::HTTP.new(uri.host, uri.port)
@@ -56,13 +55,7 @@ module ActiveSG
 
 		def request(req)
 			req["Accept_Endocing"] = "gzip, deflate, sdch"
-			res = nil
-			if @mutex == nil
-				res = @@http.request(req)
-			else
-				@mutex.synchronize { res = @@http.request(req) }
-			end
-			res
+			@@http.request(req)
 		end
 
 		def write_log(msg)
@@ -113,6 +106,8 @@ module ActiveSG
 
 			write_to_file("tmp/html/auth.html", res.body)
 
+			csrf = get_csrf(res.body)
+
 			uri = URI.parse("https://members.myactivesg.com/auth/signin")
 			header = {
 				"Cookie" => set_cookie,
@@ -128,11 +123,19 @@ module ActiveSG
 				"DNT" => "1"
 			}
 			req = Net::HTTP::Post.new(uri.path, header)
-			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password)
+			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password) + "&_csrf=" + csrf
 			res = request(req)
 			get_cookie(res)
 
 			write_to_file("tmp/html/auth-signin.html", res.body)
+		end
+
+		def get_csrf(body)
+			reg_csrv = /name="_csrf"\s*value="([^"]+)"/
+			m = reg_csrv.match(body)
+			return "" if m == nil
+
+			m[1]
 		end
 
 		def available_slots_on(date, venue)
