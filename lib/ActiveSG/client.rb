@@ -1,9 +1,10 @@
 require "net/https"
+require "cgi"
 
 module ActiveSG
 	class Client
 		attr :username, true
-		attr :password, true
+		attr :ecpassword, true
 		attr :debug, true
 		attr :mutex, true
 
@@ -42,9 +43,11 @@ module ActiveSG
 		@@is_quick_booking = false
 		@@referer_url
 
-		def initialize(username, password, debug = false)
+		@@ua = "Mozilla/5.0"
+
+		def initialize(username, ecpassword, debug = false)
 			@username = username
-			@password = password
+			@ecpassword = ecpassword
 			@debug = debug
 
 			uri = URI.parse("https://members.myactivesg.com/auth")
@@ -55,14 +58,14 @@ module ActiveSG
 
 		def request(req)
 			req["Accept_Endocing"] = "gzip, deflate, sdch"
-			@@http.request(req)
-		end
-
-		def write_log(msg)
-			puts "#{@username} : #{msg}"
+			res = @@http.request(req)
+			get_cookie(res)
+			res
 		end
 
 		def get_cookie(res)
+			return if res == nil
+
 			set_cookie_value = res.get_fields('Set-Cookie')
 			return if set_cookie_value == nil
 			
@@ -70,64 +73,109 @@ module ActiveSG
 				k,v = str[0...str.index(';')].split('=')
 				@@cookie[k] = v
 			}
-			if @debug
-				@@cookie.each{ |k,v|
-					write_log k
-					write_log v
-				}
-			end
+			@@cookie
 		end
 
 		def set_cookie()
 			@@cookie.map{ |k,v| "#{k}=#{v}" }.join(';')
 		end
 
+		def write_log(msg)
+			puts "#{@username} : #{msg}"
+		end
+
 		def write_to_file(path, text)
-			if @debug
-				File.open(path, "w") do |file|
-					file.write(text)
-				end
+			return if @debug == false
+			File.open("tmp/html/" + path, "w") do |file|
+				file.write(text)
 			end
 		end
 
+		# Login
 		def login
+			auth_page = access_auth_page()
+			return submit_login(auth_page)
+		end
+
+		def access_auth_page
 			uri = URI.parse("https://members.myactivesg.com/auth")
 			header = {
-				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept" => "text/html",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Connection" => "keep-alive",
 				"DNT" => "1",
 				"Host" => "members.myactivesg.com",
+				"User-Agent" => @@ua
+			}
+
+			req = Net::HTTP::Get.new(uri.path, header)
+			res = request(req)
+
+			res.body
+		end
+
+		def submit_login(auth_page_body)
+			uri = URI.parse("https://members.myactivesg.com/auth/signin")
+			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
 				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
+				"Cache-Control" => "max-age=0",
+				"Connection" => "keep-alive",
+				"Content-Type" => "application/x-www-form-urlencoded",
+				"Cookie" => set_cookie,
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Origin" => "https://members.myactivesg.com",
+				"Referer" => "https://members.myactivesg.com/auth",
+				"User-Agent" => @@ua
+			}
+
+			req = Net::HTTP::Post.new(uri.path, header)
+			req.body = "email=" + CGI::escape(@username) + 
+				"&ecpassword=" + CGI::escape(@ecpassword) +
+				"&_csrf=" + CGI::escape(get_csrf(auth_page_body))
+			res = request(req)
+
+			return false, res.body if res["Location"] == "https://members.myactivesg.com/profile"
+
+			uri = URI.parse("https://members.myactivesg.com/profile")
+			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"Cache-Control" => "max-age=0",
+				"Connection" => "keep-alive",
+				"Content-Type" => "application/x-www-form-urlencoded",
+				"Cookie" => set_cookie,
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Origin" => "https://members.myactivesg.com",
+				"Referer" => "https://members.myactivesg.com/auth/signin",
+				"User-Agent" => @@ua
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
 			res = request(req)
-			get_cookie(res)
 
-			write_to_file("tmp/html/auth.html", res.body)
+			return true, res.body
+		end
 
-			csrf = get_csrf(res.body)
+		# get available slots
+		def available_slots_on(date, venue)
+			@@venue_id = venue
+			@@date = date
 
-			uri = URI.parse("https://members.myactivesg.com/auth/signin")
-			header = {
-				"Cookie" => set_cookie,
-				"Origin" => "https://members.myactivesg.com",
-				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",		
-				"Content-Type" => "application/x-www-form-urlencoded",
-				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Cache-Control" => "max-age=0",
-				"Referer" => "https://members.myactivesg.com/auth",
-				"Connection" => "keep-alive",
-				"DNT" => "1"
-			}
-			req = Net::HTTP::Post.new(uri.path, header)
-			req.body = "email=" + URI.escape(@username) + "&password=" + URI.escape(@password) + "&_csrf=" + csrf
-			res = request(req)
-			get_cookie(res)
+			is_quick_book = access_facilities_page
 
-			write_to_file("tmp/html/auth-signin.html", res.body)
+			if is_quick_book
+				write_log "Quick booking"
+				@@is_quick_booking = true
+
+				slots_by_quick_booking(date, venue)
+			else
+				write_log "Non-quick booking"
+				@@is_quick_booking = false
+
+				slots_by_normal(date, venue)
+			end
 		end
 
 		def get_csrf(body)
@@ -138,38 +186,23 @@ module ActiveSG
 			m[1]
 		end
 
-		def available_slots_on(date, venue)
-			@@venue_id = venue
-			@@date = date
-
+		def access_facilities_page
 			uri = URI.parse("https://members.myactivesg.com/facilities")
 			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"Connection" => "keep-alive",
+				"Cookie" => set_cookie,
 				"DNT" => "1",
 				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
-				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Referer" => "https://members.myactivesg.com/auth",
-				"Cookie" => set_cookie,
-				"Connection" => "keep-alive",
+				"Referer" => "https://members.myactivesg.com/profile",
+				"User-Agent" => @@ua,
 			}
+
 			req = Net::HTTP::Get.new(uri.path, header)
 			res = request(req)
-			get_cookie(res)
 
-			write_to_file("tmp/html/facilities.html", res.body)
-
-			quick_booking = res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
-			
-			if quick_booking
-				write_log "Quick booking"
-				@@is_quick_booking = true
-				return slots_by_quick_booking(date, venue)
-			else
-				write_log "Non-quick booking"
-				@@is_quick_booking = false
-				return slots_by_normal(date, venue)
-			end
+			res["Location"] == "https://members.myactivesg.com/facilities/quick-booking"
 		end
 
 		def create_date_filter(date, escape)
@@ -187,85 +220,112 @@ module ActiveSG
 		end
 
 		def slots_by_quick_booking(date, venue)
+			# access quick booking page
 			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
 			header = {
-				"Cookie" => set_cookie,
-				"Origin" => "https://members.myactivesg.com",
-				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
-				"Content-Type" => "application/x-www-form-urlencoded",
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Cache-Control" => "max-age=0",
-				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Connection" => "keep-alive",
+				"Cookie" => set_cookie,
 				"DNT" => "1",
+				"Host" => "members.myactivesg.com", 
+				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
+				"User-Agent" => @@ua,
+			}
+			req = Net::HTTP::Get.new(uri, header)
+			res = request(req)
 
+			# retrieve available slots
+			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
+			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"Cache-Control" => "max-age=0",
+				"Connection" => "keep-alive",
+				"Content-Type" => "application/x-www-form-urlencoded",
+				"Cookie" => set_cookie,
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Origin" => "https://members.myactivesg.com",
+				"Referer" => "https://members.myactivesg.com/facilities/profile",
+				"User-Agent" => @@ua,
 			}
 			form_data = {
 				"activity_filter" => "18",
 				"venue_filter" => venue.to_s,
 				"date_filter" => create_date_filter(date, false)
 			}
-
 			req = Net::HTTP::Post.new(uri, header)
 			req.set_form_data(form_data)
 			res = request(req)
-			get_cookie(res)
 			@@referer_url = uri.to_s
-
-			write_to_file("tmp/html/quick-booking.html", res.body)
 
 			parse_search_result(res.body)
 		end
 
+		def access_quick_booking_page
+			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
+			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",	
+				"Connection" => "keep-alive",
+				"Cookie" => set_cookie,
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com", 
+				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
+				"User-Agent" => @@ua,
+			}
+			req = Net::HTTP::Get.new(uri, header)
+			res = request(req)
+		end
+
 		def slots_by_normal(date, venue)
-			if date.wday == 0
-				day_filter = 7
-			else
-				day_filter = date.wday + 1
-			end
+
+			@@slot_url, body = retrieve_normal_search_location
+
+			write_to_file("std_booking.html", body)
+
+			uri = URI.parse(@@slot_url)
+			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"Connection" => "keep-alive",
+				"Cookie" => set_cookie,
+				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Referer" => "https://members.myactivesg.com/facilities",
+				"User-Agent" => @@ua,
+			}
+			req = Net::HTTP::Get.new(uri, header)
+			res = request(req)
+			@@referer_url = uri.to_s
+
+			parse_search_result(res.body)
+		end
+
+		def retrieve_normal_search_location
+			day_filter = @@date.wday
+			day_filter = 7 if @@date.wday == 0
 
 			uri = URI.parse("https://members.myactivesg.com/facilities/result" \
 				+ "?activity_filter=18" \
-				+ "&venue_filter=" + venue.to_s \
+				+ "&venue_filter=" + @@venue_id.to_s \
 				+ "&day_filter=" + day_filter.to_s \
-				+ "&date_filter=" + create_date_filter(date, true) \
+				+ "&date_filter=" + create_date_filter(@@date, true) \
 				+ "&search=Search");
 			header = {
+				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
+				"Connection" => "keep-alive",
+				"Cookie" => set_cookie,
 				"DNT" => "1",
 				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
-				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Referer" => "https://members.myactivesg.com/auth",
-				"Cookie" => set_cookie,
-				"Connection" => "keep-alive",
+				"Referer" => "https://members.myactivesg.com/facilities",
+				"User-Agent" => @@ua,
 			}
 			req = Net::HTTP::Get.new(uri, header)
 			res = request(req)
-			get_cookie(res)
-
-			@@slot_url = res["Location"]
-			uri = URI.parse(@@slot_url)
-			header = {
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
-				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Referer" => "https://members.myactivesg.com/auth",
-				"Cookie" => set_cookie,
-				"Connection" => "keep-alive",
-			}
-			req = Net::HTTP::Get.new(uri, header)
-			res = request(req)
-			get_cookie(res)
-			@@referer_url = uri.to_s
-
-			write_to_file("tmp/html/result.html", res.body)
-
-			parse_search_result(res.body)
+			return res["Location"], res
 		end
 
 		def parse_search_result(body)
@@ -286,7 +346,7 @@ module ActiveSG
 			@@oauth_key = m[1]
 			@@oauth_value = m[2]
 
-			available_slots
+			return available_slots, body
 		end
 
 		def get_court_key(id)
@@ -300,7 +360,7 @@ module ActiveSG
 
 				booked = false
 				(1..30).each do
-					booked = book_single_slot(slot)
+					booked = book_single_slot(slot, @@referer_url)
 					if booked
 						puts "#{username} : court [#{slot}] booked :)"
 						break
@@ -314,21 +374,26 @@ module ActiveSG
 				end
 			}
 		end
-		def book_single_slot(slot)
+
+		def book_single_slot(slot, referer_url)
+			p "referer_url: " + referer_url
+			p "oauth_key: " + @@oauth_key
+			p "oauth_value: " + @@oauth_value   
+
 			uri = URI.parse(@@booking_url)
 			referer_url = 
 			header = {
-				"Cookie" => set_cookie,
-				"Origin" => "https://members.myactivesg.com",
-				"Host" => "members.myactivesg.com",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"User-Agent" => "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36",
-				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
 				"Accept" => "*/*",
-				"Referer" => @@referer_url,
-				"X-Requested-With" => "XMLHttpRequest",
+				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Connection" => "keep-alive",
+				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
+				"Cookie" => set_cookie,
 				"DNT" => "1",
+				"Host" => "members.myactivesg.com",
+				"Origin" => "https://members.myactivesg.com",
+				"User-Agent" => @@ua,
+				"Referer" => referer_url,
+				"X-Requested-With" => "XMLHttpRequest",
 			}
 			form_data = {
 				"activity_id" => 18,
@@ -342,9 +407,6 @@ module ActiveSG
 			req = Net::HTTP::Post.new(uri.path, header)
 			req.set_form_data(form_data)
 			res = request(req)
-			get_cookie(res) if res != nil
-
-			puts "#{@username} : #{res.body}"
 
 			if res.body[/Bad Request/] != nil
 				puts "#{username} : *****ERROR********"
