@@ -58,6 +58,13 @@ module ActiveSG
 
 		def request(req)
 			req["Accept_Endocing"] = "gzip, deflate, sdch"
+			req["Upgrade-Insecure-Requests"] = "1"
+			req["User-Agent"] = @@ua
+			req["Host"] = "members.myactivesg.com"
+			req["Accept-Language"] = "ja,en;q=0.8,zh;q=0.6"
+			req["DNT"] = "1"
+			req["Connection"] = "keep-alive"
+			req["Cookie"] = set_cookie
 			res = @@http.request(req)
 			get_cookie(res)
 			res
@@ -100,12 +107,7 @@ module ActiveSG
 		def access_auth_page
 			uri = URI.parse("https://members.myactivesg.com/auth")
 			header = {
-				"Accept" => "text/html",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
-				"User-Agent" => @@ua
+				"Accept" => "text/html"
 			}
 
 			req = Net::HTTP::Get.new(uri.path, header)
@@ -118,16 +120,10 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/auth/signin")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Cache-Control" => "max-age=0",
-				"Connection" => "keep-alive",
 				"Content-Type" => "application/x-www-form-urlencoded",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
 				"Origin" => "https://members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/auth",
-				"User-Agent" => @@ua
+				"Referer" => "https://members.myactivesg.com/auth"
 			}
 
 			req = Net::HTTP::Post.new(uri.path, header)
@@ -141,16 +137,10 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/profile")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Cache-Control" => "max-age=0",
-				"Connection" => "keep-alive",
 				"Content-Type" => "application/x-www-form-urlencoded",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
 				"Origin" => "https://members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/auth/signin",
-				"User-Agent" => @@ua
+				"Referer" => "https://members.myactivesg.com/auth/signin"
 			}
 			req = Net::HTTP::Get.new(uri.path, header)
 			res = request(req)
@@ -190,13 +180,7 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/facilities")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/profile",
-				"User-Agent" => @@ua,
+				"Referer" => "https://members.myactivesg.com/profile"
 			}
 
 			req = Net::HTTP::Get.new(uri.path, header)
@@ -224,13 +208,7 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com", 
-				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
-				"User-Agent" => @@ua,
+				"Referer" => "https://members.myactivesg.com/facilities/quick-booking"
 			}
 			req = Net::HTTP::Get.new(uri, header)
 			res = request(req)
@@ -239,16 +217,10 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
 				"Cache-Control" => "max-age=0",
-				"Connection" => "keep-alive",
 				"Content-Type" => "application/x-www-form-urlencoded",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
 				"Origin" => "https://members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/facilities/profile",
-				"User-Agent" => @@ua,
+				"Referer" => "https://members.myactivesg.com/facilities/profile"
 			}
 			form_data = {
 				"activity_filter" => "18",
@@ -267,11 +239,6 @@ module ActiveSG
 			uri = URI.parse("https://members.myactivesg.com/facilities/quick-booking")
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",	
-				"Connection" => "keep-alive",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com", 
 				"Referer" => "https://members.myactivesg.com/facilities/quick-booking",
 				"User-Agent" => @@ua,
 			}
@@ -288,13 +255,7 @@ module ActiveSG
 			uri = URI.parse(@@slot_url)
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/facilities",
-				"User-Agent" => @@ua,
+				"Referer" => "https://members.myactivesg.com/facilities"
 			}
 			req = Net::HTTP::Get.new(uri, header)
 			res = request(req)
@@ -315,13 +276,7 @@ module ActiveSG
 				+ "&search=Search");
 			header = {
 				"Accept" => "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
-				"Referer" => "https://members.myactivesg.com/facilities",
-				"User-Agent" => @@ua,
+				"Referer" => "https://members.myactivesg.com/facilities"
 			}
 			req = Net::HTTP::Get.new(uri, header)
 			res = request(req)
@@ -384,14 +339,8 @@ module ActiveSG
 			referer_url = 
 			header = {
 				"Accept" => "*/*",
-				"Accept-Language" => "ja,en;q=0.8,zh;q=0.6",
-				"Connection" => "keep-alive",
 				"Content-Type" => "application/x-www-form-urlencoded; charset=UTF-8",
-				"Cookie" => set_cookie,
-				"DNT" => "1",
-				"Host" => "members.myactivesg.com",
 				"Origin" => "https://members.myactivesg.com",
-				"User-Agent" => @@ua,
 				"Referer" => referer_url,
 				"X-Requested-With" => "XMLHttpRequest",
 			}
